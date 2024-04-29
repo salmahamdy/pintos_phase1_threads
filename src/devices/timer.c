@@ -1,3 +1,4 @@
+
 #include "devices/timer.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -30,25 +31,6 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
-//--------------edited--------------------------------
-struct list sleeping_list;
-
-struct sleeping_thread {
-  int64_t wake_time;
-  struct semaphore semaphore;
-  struct list_elem elem;
-};
-
-
-static bool compare_wake_time(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  struct sleeping_thread *st_a = list_entry(a, struct sleeping_thread, elem);
-  struct sleeping_thread *st_b = list_entry(b, struct sleeping_thread, elem);
-  return st_a->wake_time < st_b->wake_time;
-}
-//------------------------------------------------------
-
-
-
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -56,10 +38,6 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-
-  //--------------edited--------------------------------
-  list_init(&sleeping_list);
-  //------------------------------------------------------
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -109,24 +87,25 @@ timer_elapsed (int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
+  
+  /***********start modified function*********/
 void
 timer_sleep (int64_t ticks) 
 {
-  // int64_t start = timer_ticks ();
-
-  // ASSERT (intr_get_level () == INTR_ON);
-  // while (timer_elapsed (start) < ticks) 
-  //   thread_yield ();
-  enum intr_level old_level = intr_disable ();
-
-  struct sleeping_thread st;
-  sema_init(&st.semaphore, 0);
-  st.wake_time = timer_ticks() + ticks;
-  list_insert_ordered(&sleeping_list, &st.elem, (list_less_func *) &compare_wake_time, NULL);
-  sema_down(&st.semaphore);
-
-  intr_set_level(old_level);
+  
+  /*firstly we should disable the global inteerupt then save the amount of ticks that 
+  the operating system want the certain thread to sleep and block 
+  the thread then check  in timer interrupt to unblock the sleaping thread
+  finally  we should enable the interrupt again*/
+  if(ticks <= 0) return;
+  ASSERT (intr_get_level () == INTR_ON);
+  enum intr_level old_level = intr_disable(); 
+  struct thread*  currentThread = thread_current();
+  currentThread->sleepingTime = ticks; //ticks to sleep
+  thread_block(); //block the thread and change the status to be blocked 
+  intr_set_level(old_level); //enable the interrupt
 }
+/***********end modified function*********/
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
    turned on. */
@@ -199,26 +178,19 @@ timer_print_stats (void)
 }
 
 /* Timer interrupt handler. */
+
+/**********start modified function**************/
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
+  /*firstly we should check if one of the sleeping threads should wake up*/
+  thread_foreach( wake_up_sleeping_thread , NULL);
   ticks++;
-
-  //--------------edited--------------------------------
-  struct list_elem *e;
-  for (e = list_begin(&sleeping_list); e != list_end(&sleeping_list); e = list_next(e)) {
-    struct sleeping_thread *st = list_entry(e, struct sleeping_thread, elem);
-    if (st->wake_time <= ticks) {
-      sema_up(&st->semaphore);
-      list_remove(e);
-    } else {
-      break;
-    }
-  }
-  //------------------------------------------------------
   thread_tick ();
+  
 }
 
+/**********end modified function**************/
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
 static bool
