@@ -5,33 +5,6 @@
 #include <list.h>
 #include <stdint.h>
 
-#include <stdint.h>
-
-typedef int fixed_point;
-
-fixed_point int_to_fixed(int x);
-
-int fixed_to_int_floor(fixed_point x) ;
-
-int fixed_to_int_round(fixed_point x) ;
-
-fixed_point fixed_add(fixed_point x, fixed_point y);
-
-fixed_point fixed_subtract(fixed_point x, fixed_point y);
-
-fixed_point int_fixed_add(fixed_point x, int n); 
-
-fixed_point int_fixed_sub(int n, fixed_point x);
-
-fixed_point fixed_multiply(fixed_point x, fixed_point y);
-
-fixed_point fixed_divide(fixed_point x, fixed_point y) ;
-
-fixed_point int_fixed_mul(fixed_point x, int n); 
-
-fixed_point int_fixed_div(fixed_point x, int n);
-
-
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -51,8 +24,6 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-
-extern int load_avg;
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -117,27 +88,23 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+  int original_priority;             //for donation
+           int nice;
     int recent_cpu;
-    int nice;
-    struct list_elem allelem;           /* List element for all threads list. */
+struct list acq_locks_list;         //list of the acquired locks
+struct lock* current_waitingOnLock;  //lock needed to be acquired by the current thread
+    struct list_elem allelem;  /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+   
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
-  /*modified*/
-  /*alarm*/
-   uint64_t sleepingTime;      /*sleeping time of thread*/
-
-   /*donation*/
-   int original_Priority;
-   struct list acq_Lock_list ;
-   struct lock* current_waitingOnLock; 
-  /*end modified*/
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
@@ -146,14 +113,7 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-/*modified*/
-void wake_up_sleeping_thread(struct thread *t, void *aux);
-bool priorityHandler(const struct list_elem *a, const struct list_elem *b, void *aux);
-bool lock_Priority_Handler(const struct list_elem *a, const struct list_elem *b, void *aux);
-void Release_LockPriority_Handling(struct lock* lock);
-void mult_Lock_Release(struct lock* lock);
-void Nest_Donation(struct thread * holderThread);
-/*end modified*/
+
 void thread_init (void);
 void thread_start (void);
 
@@ -173,20 +133,46 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
-
+void calc_priority(struct thread *t) ;
+void calc_recent_cpu(struct thread *t);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+typedef int fixed_point;
 
-void calc_recent_cpu(struct thread *);
-void calc_priority(struct thread *);
-void calc_load_avg();
+fixed_point int_to_fixed(int x);
 
+int fixed_to_int_floor(fixed_point x) ;
+
+int fixed_to_int_round(fixed_point x) ;
+
+fixed_point fixed_add(fixed_point x, fixed_point y);
+
+fixed_point fixed_subtract(fixed_point x, fixed_point y);
+
+fixed_point int_fixed_add(fixed_point x, int n); 
+
+fixed_point int_fixed_sub(int n, fixed_point x);
+
+fixed_point fixed_multiply(fixed_point x, fixed_point y);
+
+fixed_point fixed_divide(fixed_point x, fixed_point y) ;
+
+fixed_point int_fixed_mul(fixed_point x, int n); 
+
+fixed_point int_fixed_div(fixed_point x, int n);
+ 
+
+ bool compare_priority(const struct list_elem *t1 ,const struct list_elem *t2,void *aux);
+ bool get_max(const struct list_elem *t1 ,const struct list_elem *t2,void *aux);
+ bool get_max_Lock(const struct list_elem *t1 ,const struct list_elem *t2,void *aux);
+ void Nest_Donation(struct thread * holderThread);
 #endif /* threads/thread.h */

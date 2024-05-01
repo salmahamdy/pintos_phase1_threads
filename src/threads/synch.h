@@ -1,4 +1,3 @@
-
 #ifndef THREADS_SYNCH_H
 #define THREADS_SYNCH_H
 
@@ -23,10 +22,8 @@ struct lock
   {
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
-
-    /*modified*/
-    int lockPriority;
-    struct list_elem lockElem;
+ int Lock_priority;
+ struct list_elem Lock_elem;
   };
 
 void lock_init (struct lock *);
@@ -45,7 +42,8 @@ void cond_init (struct condition *);
 void cond_wait (struct condition *, struct lock *);
 void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
-bool semaphorePriorityHandler(const struct list_elem *a, const struct list_elem *b, void *aux);
+ bool get_max_sema(const struct list_elem *t1, const struct list_elem *t2, void *aux);
+
 /* Optimization barrier.
 
    The compiler will not reorder operations across an
